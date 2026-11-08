@@ -72,17 +72,17 @@ Bloom-backend/
 
 ### Models và quan hệ chính
 
-- `User`: username, password hash, role (`admin`, `staff`, `customer`), trạng thái, hồ sơ, hạng thành viên và số dư ví.
-- `Staff`: nhân viên/chuyên viên; có thể liên kết `userId` tới `User`.
+- `User`: username, password hash, role (`admin`, `staff`, `customer`), trạng thái, `mustChangePassword`, hồ sơ, mã khách hàng, hạng thành viên, số dư ví và `deletedAt`.
+- `Staff`: nhân viên/chuyên viên, `staffCode`, trạng thái (`working`, `leave`, `inactive`), `deletedAt`; có thể liên kết `userId` tới `User`.
 - `Service`: dịch vụ, giá, thời lượng, nhóm, trạng thái và slug.
 - `Booking`: lịch hẹn liên kết khách/dịch vụ/nhân viên; ngày `YYYY-MM-DD`, giờ `HH:mm`, trạng thái.
 - `Schedule`: ca làm/ngày nghỉ của nhân viên.
-- `Product`: mã, tên, giá và tồn kho.
-- `Invoice`: hóa đơn, dòng hàng, phương thức thanh toán và trạng thái.
-- `Deposit`: tiền cọc và trạng thái giữ/hoàn/đối soát.
-- `CustomerTreatment`: liệu trình khách mua, số buổi và lịch sử điều trị.
+- `Product`: mã, tên, giá, tồn kho và `deletedAt`.
+- `Invoice`: hóa đơn, dòng hàng, phương thức thanh toán, trạng thái (`draft`, `issued`, `partially_paid`, `paid`, `voided`) và các trường tổng/giảm/cấn cọc/thanh toán/công nợ.
+- `Deposit`: `amount` là tiền cọc thực tế, `depositStatus` (`held`, `refunded`, `settled`); `depositAmount` chỉ được đọc để tương thích dữ liệu cũ.
+- `CustomerTreatment`: liệu trình khách mua, `treatmentCode`, số buổi và lịch sử điều trị.
 - `SkinAnalysis`: kết quả phân tích da và gợi ý sản phẩm/dịch vụ.
-- `Article`: bài viết, tác giả là nhân viên và trạng thái xuất bản.
+- `Article`: bài viết, `authorStaffId` tham chiếu `Staff`, trạng thái (`draft`, `published`, `archived`); `isPublished` được giữ để tương thích client/dữ liệu cũ.
 - `CampaignAnalytics`: mùa chiến dịch, phân khúc và dự đoán doanh thu.
 
 ## 3. Cài đặt, env và lệnh chạy
@@ -147,7 +147,7 @@ Base URL local: `http://localhost:3002`.
 | `GET /api/public/services/:id` | ID dịch vụ | Chi tiết dịch vụ đang hoạt động. |
 | `GET /api/public/staffs` | Không | Nhân viên có `status: "working"`. |
 | `GET /api/public/professors` | Không | Alias hiện tại, trả danh sách nhân viên đang làm việc. |
-| `GET /api/public/articles` | `category` tùy chọn | Chỉ trả bài viết có `isPublished: true`, populate thông tin tác giả. |
+| `GET /api/public/articles` | `category` tùy chọn | Chỉ trả bài viết `status: "published"`; vẫn đọc record cũ chỉ có `isPublished: true`, populate tác giả từ `Staff`. |
 
 ### Customer API
 
@@ -170,11 +170,19 @@ Tất cả endpoint cần session user có role `admin`.
 | `PATCH /api/admin/bookings/:id/status` | `{ "status": "pending\|confirmed\|in_treatment\|completed\|cancelled" }` | Cập nhật trạng thái lịch. |
 | `GET /api/admin/staffs` | Không | Danh sách Staff. |
 | `POST /api/admin/schedules` | `{ "staffId": "<ObjectId>", "date": "YYYY-MM-DD", "shift": "sang\|chieu\|toi", "isOff": false, "maxCapacity": 5 }` | `201`, tạo schedule. |
-| `POST /api/admin/pos/checkout` | `{ "customerId": "<ObjectId>", "items": [{ "itemId": "<ObjectId>", "name": "...", "type": "service\|product", "quantity": 1, "unitPrice": 100000, "amount": 100000 }], "discountAmount": 0, "paymentMethod": "cash\|banking\|card\|prepaid_wallet", "isDraft": false }` | `201`, tạo invoice; thanh toán prepaid wallet trừ số dư khách. |
+| `POST /api/admin/pos/checkout` | `{ "customerId": "<ObjectId>", "items": [{ "itemId": "<ObjectId>", "type": "service\|product", "quantity": 1 }], "discountAmount": 0, "depositId": "<ObjectId optional>", "paidAmount": 100000, "paymentMethod": "cash\|banking\|card\|prepaid_wallet", "isDraft": false }` | `201`, tạo invoice trong MongoDB transaction. Server lấy tên/giá từ Service/Product, tính `totalAmount`, `depositDeduction`, `finalAmount = max(0, totalAmount - discountAmount - depositDeduction)` và `debtAmount = max(0, finalAmount - paidAmount)`. `paidAmount` là tiền thực thu (mặc định thu đủ số còn lại); cọc được cấn toàn bộ theo `Deposit.amount` và chuyển `held` → `settled`; tồn kho sản phẩm và ví được cập nhật nguyên tử. Hóa đơn nháp không trừ kho, cấn cọc hoặc thu tiền. |
 | `POST /api/admin/pos/prepaid-wallet` | `{ "customerId": "<ObjectId>", "topupAmount": 100000 }` | Cộng số dư ví. |
 | `POST /api/admin/customers` | `{ "username": "...", "fullName": "...", "phone": "...", "email": "..." }` | `201`, tạo customer với mật khẩu tạm `123456`; response chỉ trả mật khẩu tạm một lần cho admin. Đăng nhập sẽ báo `mustChangePassword: true`; các API admin/customer bị chặn đến khi khách đổi mật khẩu bằng `/api/auth/change-password`. Mật khẩu mới phải tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và số. |
 
 Response API thống nhất theo `{ "success": boolean, "message": string, "data": object | array | null }`. Lỗi validation/schema Mongoose và JSON sai trả `400`, dữ liệu trùng trả `409`, route không tồn tại trả `404`, lỗi chưa xác định trả `500` với thông báo chung; chi tiết lỗi máy chủ chỉ ghi log phía server. Đặc tả OpenAPI 3.0.3 nằm tại [`openapi.json`](./openapi.json); có thể mở/import file này bằng Swagger Editor, Swagger UI hoặc Postman.
+
+### Mã nghiệp vụ, trạng thái và soft delete
+
+- Khi lưu document mới qua Mongoose `save/create`, backend cấp mã tăng tuần tự bằng collection counter: `KH-001`, `ST-001`, `BK-YYYYMMDD-001`, `INV-YYYYMM-001`, `COC-001`, `TL001`. Các mã được lưu trên `customerCode`, `staffCode`, `bookingCode`, `invoiceCode`, `depositCode`, `treatmentCode`; `User.customId`, `Staff.customId` và `CustomerTreatment.customTreatmentId` cũ không bị ghi đè.
+- Counter cấp mã nguyên tử để tránh trùng khi có nhiều request cùng lúc; nếu mã đã tồn tại từ dữ liệu cũ, helper bỏ qua và cấp số kế tiếp. Sequence có thể có khoảng trống khi giao dịch lỗi.
+- `deletedAt` là chuẩn soft delete cho User, Product, Service và Staff (`null` nghĩa là chưa xóa). Endpoint ẩn dịch vụ ghi `deletedAt`; API công khai, đặt lịch và POS bỏ qua record đã xóa.
+- `categoryGroup` của Service và `category` của Article đã có enum slug ở schema. Danh sách Article hiện tại: `dieu-tri-mun`, `dieu-tri-nam`, `dieu-tri-seo`, `cham-soc-da`, `cong-nghe`, `chong-lao-hoa`.
+- POS checkout yêu cầu MongoDB hỗ trợ transaction (Atlas hoặc replica set). Nếu MongoDB từ chối transaction, toàn bộ thao tác thất bại và không tạo hóa đơn/giảm kho/đổi ví/cấn cọc một phần.
 
 ## 5. Migration và seed data
 
@@ -222,5 +230,6 @@ Dataset đang dùng là `seed-data/bloom_dataset_export.js`; snapshot trong arch
 
 1. Bộ test tự động hiện bao phủ các luồng booking, public articles, error middleware và kiểm tra route trong OpenAPI; chưa thay thế integration test với MongoDB thật.
 2. Dataset hiện là một file JavaScript export, chưa phải JSON riêng theo collection. Chuyển format cần giữ tương thích migration và xác minh mapping trước khi bỏ nguồn cũ.
+3. `Tai_Lieu_Thiet_Ke_CSDL_MongoDB_Clinic_Booking_v26.docx` trong workspace là tài liệu tham khảo để đối chiếu; README và Backend có thể được cập nhật theo quyết định của nhóm, còn DOCX được giữ nguyên và không chỉnh sửa trong thay đổi này.
 
 Không sửa schema, response, quyền hoặc production data chỉ để README trông nhất quán. Xử lý từng khoảng trống bằng issue/PR và test phù hợp.

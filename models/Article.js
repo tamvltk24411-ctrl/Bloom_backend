@@ -12,7 +12,21 @@ const articleSchema = new mongoose.Schema({
   summary: { type: String, required: true },
   contentHtml: { type: String, required: true },
   thumbnail: { type: String, default: '' },
-  isPublished: { type: Boolean, default: true }
+  status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
+  isPublished: { type: Boolean, default: undefined }
 }, { timestamps: true });
+
+articleSchema.pre('init', function (document) {
+  if (document.status === undefined && typeof document.isPublished === 'boolean') {
+    document.status = document.isPublished ? 'published' : 'draft';
+  }
+});
+
+articleSchema.pre('validate', function () {
+  if (this.isModified('isPublished') && !this.isModified('status')) {
+    this.status = this.isPublished ? 'published' : 'draft';
+  }
+  this.isPublished = this.status === 'published';
+});
 
 module.exports = mongoose.model('Article', articleSchema);

@@ -7,7 +7,8 @@ const productSchema = new mongoose.Schema({
   costPrice: { type: Number, default: 0 },
   stockQuantity: { type: Number, default: 0 },
   unit: { type: String, default: 'Chai' },
-  image: { type: String, default: '' }
+  image: { type: String, default: '' },
+  deletedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Product', productSchema);

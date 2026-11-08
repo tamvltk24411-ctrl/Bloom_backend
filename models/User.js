@@ -1,5 +1,6 @@
 // models/User.js
 const mongoose = require('mongoose');
+const { generateBusinessCode } = require('../utils/business-codes');
 
 const userSchema = new mongoose.Schema({
   // 1. Đăng nhập & Phân quyền hệ thống
@@ -15,6 +16,7 @@ const userSchema = new mongoose.Schema({
 
   // 2. Hồ sơ thông tin cá nhân
   customId: { type: String, default: '' },
+  customerCode: { type: String, unique: true, sparse: true },
   fullName: { type: String, default: '', trim: true },
   phone: { type: String, default: '', trim: true },
   email: { type: String, default: '', trim: true, lowercase: true },
@@ -33,9 +35,21 @@ const userSchema = new mongoose.Schema({
   totalSpent: { type: Number, default: 0, min: 0 },
   lastVisit: { type: Date, default: null },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+  deletedAt: { type: Date, default: null },
   note: { type: String, default: '' }
 }, { 
   timestamps: true 
+});
+
+userSchema.pre('save', async function () {
+  if (this.isNew && this.role === 'customer' && !this.customerCode) {
+    this.customerCode = await generateBusinessCode(
+      this.constructor,
+      'customerCode',
+      'customer',
+      sequence => `KH-${String(sequence).padStart(3, '0')}`
+    );
+  }
 });
 
 module.exports = mongoose.model('User', userSchema);

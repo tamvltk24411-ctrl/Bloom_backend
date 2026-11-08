@@ -30,7 +30,8 @@ function getVietnamDateTime() {
 exports.getOverview = async (req, res, next) => {
   try {
     const customerId = req.session.user._id;
-    const user = await User.findById(customerId).select('fullName membershipTier prepaidBalance avatar');
+    const user = await User.findOne({ _id: customerId, deletedAt: null })
+      .select('fullName membershipTier prepaidBalance avatar');
     const upcomingBookings = await Booking.find({
       customerId,
       status: { $in: ['pending', 'confirmed'] }
@@ -116,12 +117,12 @@ exports.createBooking = async (req, res, next) => {
       });
     }
 
-    const user = await User.findById(customerId);
+    const user = await User.findOne({ _id: customerId, deletedAt: null });
     if (!user) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin người dùng!', data: null });
     }
 
-    const service = await Service.findOne({ _id: serviceId, status: 'active' });
+    const service = await Service.findOne({ _id: serviceId, status: 'active', deletedAt: null });
     if (!service) {
       return res.status(404).json({
         success: false,
@@ -148,7 +149,7 @@ exports.createBooking = async (req, res, next) => {
     }
 
     if (staffId) {
-      const staff = await Staff.findById(staffId);
+      const staff = await Staff.findOne({ _id: staffId, deletedAt: null });
       if (!staff) {
         return res.status(404).json({
           success: false,
@@ -239,13 +240,7 @@ exports.createBooking = async (req, res, next) => {
       }
     }
 
-    // Sinh mã booking tự động
-    const count = await Booking.countDocuments();
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const bookingCode = `BK-${dateStr}-${String(count + 1).padStart(3, '0')}`;
-
     const newBooking = await Booking.create({
-      bookingCode,
       customerId,
       customerName: user.fullName || user.username,
       customerPhone: user.phone || '',

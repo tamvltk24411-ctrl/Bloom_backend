@@ -36,18 +36,17 @@ function stubBookingDependencies(t, options = {}) {
   const schedule = Object.hasOwn(options, 'schedule')
     ? options.schedule
     : { isOff: false, maxCapacity: 5 };
-  t.mock.method(User, 'findById', async () => ({
+  t.mock.method(User, 'findOne', async () => ({
     fullName: 'Test Customer',
     username: 'test-customer',
     phone: ''
   }));
   t.mock.method(Service, 'findOne', async () => ({ durationMinutes: 60 }));
-  t.mock.method(Staff, 'findById', async () => ({ status: 'working' }));
+  t.mock.method(Staff, 'findOne', async () => ({ status: 'working' }));
   t.mock.method(Schedule, 'findOne', async () => schedule);
   t.mock.method(Booking, 'find', () => ({
     populate: async () => bookings
   }));
-  t.mock.method(Booking, 'countDocuments', async () => 0);
   t.mock.method(Booking, 'create', async booking => booking);
 }
 

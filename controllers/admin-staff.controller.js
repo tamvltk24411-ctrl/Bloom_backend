@@ -4,7 +4,7 @@ const Schedule = require('../models/Schedule');
 // GET /api/admin/staffs (Danh sách nhân sự)
 exports.getStaffs = async (req, res, next) => {
   try {
-    const staffs = await Staff.find();
+    const staffs = await Staff.find({ deletedAt: null });
     return res.json({
       success: true,
       message: 'Lấy danh sách nhân viên thành công!',

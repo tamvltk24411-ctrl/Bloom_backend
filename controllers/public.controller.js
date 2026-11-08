@@ -7,7 +7,7 @@ const Article = require('../models/Article');
 exports.getServices = async (req, res, next) => {
   try {
     const { categoryGroup } = req.query;
-    const filter = { status: 'active' };
+    const filter = { status: 'active', deletedAt: null };
     if (categoryGroup) filter.categoryGroup = categoryGroup;
 
     const services = await Service.find(filter);
@@ -33,7 +33,7 @@ exports.getServiceById = async (req, res, next) => {
       });
     }
 
-    const service = await Service.findOne({ _id: id, status: 'active' });
+    const service = await Service.findOne({ _id: id, status: 'active', deletedAt: null });
     if (!service) {
       return res.status(404).json({
         success: false,
@@ -55,7 +55,7 @@ exports.getServiceById = async (req, res, next) => {
 // GET /api/public/professors
 exports.getStaffs = async (req, res, next) => {
   try {
-    const staffList = await Staff.find({ status: 'working' });
+    const staffList = await Staff.find({ status: 'working', deletedAt: null });
     return res.json({
       success: true,
       message: 'Lấy danh sách nhân viên thành công!',
@@ -72,7 +72,12 @@ exports.getProfessors = exports.getStaffs;
 exports.getArticles = async (req, res, next) => {
   try {
     const { category } = req.query;
-    const filter = { isPublished: true };
+    const filter = {
+      $or: [
+        { status: 'published' },
+        { status: { $exists: false }, isPublished: true }
+      ]
+    };
     if (category) filter.category = category;
 
     const articles = await Article.find(filter).populate('authorStaffId', 'staffName title avatar');

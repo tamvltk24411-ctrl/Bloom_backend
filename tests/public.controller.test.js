@@ -28,7 +28,13 @@ test('public article list only queries published articles and preserves category
     throw error;
   });
 
-  assert.deepEqual(query, { isPublished: true, category: 'cham-soc-da' });
+  assert.deepEqual(query, {
+    $or: [
+      { status: 'published' },
+      { status: { $exists: false }, isPublished: true }
+    ],
+    category: 'cham-soc-da'
+  });
   assert.deepEqual(populateArguments, ['authorStaffId', 'staffName title avatar']);
   assert.equal(response.body.success, true);
   assert.equal(response.body.data.length, 1);

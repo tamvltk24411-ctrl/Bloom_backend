@@ -35,6 +35,7 @@ exports.login = async (req, res, next) => {
 
     // Tìm user theo username, email hoặc phone
     const user = await User.findOne({
+      deletedAt: null,
       $or: [
         { username: identifier },
         { email: identifier.toLowerCase() },
@@ -157,7 +158,10 @@ exports.register = async (req, res, next) => {
 // GET /api/auth/profile
 exports.getProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.session.user._id).select('-password');
+    const user = await User.findOne({
+      _id: req.session.user._id,
+      deletedAt: null
+    }).select('-password');
     return res.json({
       success: true,
       message: 'Lấy thông tin cá nhân thành công!',
@@ -215,7 +219,7 @@ exports.changePassword = async (req, res, next) => {
       });
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findOne({ _id: userId, deletedAt: null });
     if (!user) {
       return res.status(404).json({
         success: false,

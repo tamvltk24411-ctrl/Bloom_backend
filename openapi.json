@@ -426,13 +426,47 @@
       "post": {
         "tags": ["Admin"],
         "summary": "Thanh toán POS",
+        "description": "Backend lấy tên và giá từ catalog, tự tính tổng/cấn cọc/công nợ; tạo invoice, trừ kho, cập nhật ví và đối soát cọc trong MongoDB transaction. `depositDeduction` không nhận từ client; gửi `depositId` để cấn toàn bộ số tiền trong khoản cọc đang giữ.",
         "security": [{ "sessionCookie": [] }],
-        "requestBody": { "$ref": "#/components/requestBodies/JsonObject" },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["customerId", "items"],
+                "properties": {
+                  "customerId": { "type": "string", "pattern": "^[a-fA-F0-9]{24}$" },
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": ["itemId", "type", "quantity"],
+                      "properties": {
+                        "itemId": { "type": "string", "pattern": "^[a-fA-F0-9]{24}$" },
+                        "type": { "type": "string", "enum": ["service", "product"] },
+                        "quantity": { "type": "integer", "minimum": 1 }
+                      }
+                    }
+                  },
+                  "discountAmount": { "type": "number", "minimum": 0, "default": 0 },
+                  "depositId": { "type": "string", "pattern": "^[a-fA-F0-9]{24}$" },
+                  "paidAmount": { "type": "number", "minimum": 0, "description": "Số tiền thực thu; mặc định bằng finalAmount. Server tự tính debtAmount." },
+                  "paymentMethod": { "type": "string", "enum": ["cash", "banking", "card", "prepaid_wallet"], "default": "cash" },
+                  "isDraft": { "type": "boolean", "default": false }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": { "$ref": "#/components/responses/Success" },
           "400": { "$ref": "#/components/responses/BadRequest" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
           "default": { "$ref": "#/components/responses/Error" }
         }
       }

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { dateParts, generateBusinessCode } = require('../utils/business-codes');
 
 const bookingSchema = new mongoose.Schema({
   bookingCode: { type: String, required: true, unique: true },
@@ -17,5 +18,18 @@ const bookingSchema = new mongoose.Schema({
     default: 'pending' 
   }
 }, { timestamps: true });
+
+bookingSchema.pre('save', async function () {
+  if (this.isNew && !this.bookingCode) {
+    const { year, month, day } = dateParts();
+    const counterName = `booking:${year}${month}${day}`;
+    this.bookingCode = await generateBusinessCode(
+      this.constructor,
+      'bookingCode',
+      counterName,
+      sequence => `BK-${year}${month}${day}-${String(sequence).padStart(3, '0')}`
+    );
+  }
+});
 
 module.exports = mongoose.model('Booking', bookingSchema);
